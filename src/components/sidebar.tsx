@@ -12,10 +12,19 @@ export default function Sidebar() {
         { name: "Products", icon: Store, path: "/dashboard/products" },
     ];
 
-    const handleLogout = () => {
-        // TODO: tambahkan logic logout (hapus session/cookie/token)
-        console.log("User logged out");
-        window.location.href = "/login"; // redirect ke halaman login
+    const handleLogout = async () => {
+        const token = localStorage.getItem("token");
+
+        await fetch("http://127.0.0.1:8000/api/logout", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Accept": "application/json",
+            },
+        });
+
+        localStorage.removeItem("token");
+        window.location.href = "/login";
     };
 
     return (

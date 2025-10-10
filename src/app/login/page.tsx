@@ -7,10 +7,40 @@ export default function LoginPage() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        console.log("Login data:", { email, password });
-        // TODO: sambungkan ke backend API
+
+        try {
+            const response = await fetch("http://127.0.0.1:8000/api/login", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                body: JSON.stringify({
+                    email,
+                    password,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                alert(data.message || "Login gagal!");
+                return;
+            }
+
+            // simpan token ke localStorage
+            localStorage.setItem("token", data.token);
+
+            alert("Login berhasil!");
+            // contoh redirect ke halaman dashboard
+            window.location.href = "/";
+
+        } catch (error) {
+            console.error(error);
+            alert("Terjadi kesalahan koneksi ke server");
+        }
     };
 
     return (
