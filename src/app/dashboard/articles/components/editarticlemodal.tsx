@@ -20,63 +20,86 @@ interface Props {
     onSave: (updated: Article) => void;
 }
 
+type EditableArticle = Omit<Article, "images"> & {
+    images: (File | { id: number; image_url: string })[];
+};
+
+
 export default function EditArticleModal({ article, onClose, onSave }: Props) {
-    const [form, setForm] = useState<Article>(article);
+    const [form, setForm] = useState<EditableArticle>({
+        ...article,
+        images: article.images || [],
+    });
     const [categoryIds, setCategoryIds] = useState<{ [key: string]: number }>({});
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Ambil mapping kategori dari backend
+    // Ambil kategori dari backend dan inisialisasi form
     useEffect(() => {
         const fetchCategories = async () => {
             try {
                 const response = await fetch("http://127.0.0.1:8000/api/categories");
-                if (!response.ok) throw new Error("Gagal mengambil kategori");
+                if (!response.ok) throw new Error("Failed to fetch categories");
                 const data = await response.json();
-                const idsMap = data.reduce((acc: { [key: string]: number }, cat: { id: number; name: string }) => {
-                    acc[cat.name] = cat.id;
-                    return acc;
-                }, {});
+
+                // Mapping nama kategori ke ID
+                const idsMap = data.reduce(
+                    (acc: { [key: string]: number }, cat: { id: number; name: string }) => {
+                        acc[cat.name] = cat.id;
+                        return acc;
+                    },
+                    {}
+                );
                 setCategoryIds(idsMap);
 
-                // Inisialisasi kategori berdasarkan ID dari artikel
-                const initialCategories = article.categories.map((cat) => cat.name);
+                // Sinkronisasi kategori artikel yang ada
+                const updatedCategories = article.categories.map((cat) => ({
+                    id: idsMap[cat.name] || cat.id,
+                    name: cat.name,
+                }));
+
                 setForm((prev) => ({
                     ...prev,
-                    categories: initialCategories.map((name) => categoryIds[name] || 0).filter((id) => id !== 0),
+                    categories: updatedCategories,
                 }));
             } catch (err) {
-                setError(err instanceof Error ? err.message : "Terjadi kesalahan");
+                setError(err instanceof Error ? err.message : "An unexpected error occurred");
             }
         };
+
         fetchCategories();
     }, [article.categories]);
 
+    // Handle perubahan input teks
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        setForm({ ...form, [e.target.name]: e.target.value, error: "" });
+        setForm({ ...form, [e.target.name]: e.target.value });
     };
 
+    // Handle perubahan kategori (klik tombol)
     const handleCategoryChange = (cat: string) => {
         const catId = categoryIds[cat] || 0;
+        if (!catId) return;
+
         setForm((prev) => {
-            const exists = prev.categories.includes(catId);
+            const exists = prev.categories.some((c) => c.id === catId);
             return {
                 ...prev,
                 categories: exists
-                    ? prev.categories.filter((c) => c !== catId)
-                    : [...prev.categories, catId].filter((id) => id !== 0),
-                error: "",
+                    ? prev.categories.filter((c) => c.id !== catId)
+                    : [...prev.categories, { id: catId, name: cat }],
             };
         });
     };
 
+    // Handle upload gambar
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
-            const files = Array.from(e.target.files).slice(0, 2); // Max 2 images
-            setForm((prev) => ({ ...prev, images: files, error: "" }));
+            const files = Array.from(e.target.files).slice(0, 2); // max 2 gambar
+            setForm((prev) => ({ ...prev, images: files }));
         }
     };
 
+    // Handle simpan perubahan
     const handleSave = async () => {
         setLoading(true);
         setError(null);
@@ -85,15 +108,19 @@ export default function EditArticleModal({ article, onClose, onSave }: Props) {
         formData.append("title", form.title);
         formData.append("content", form.content);
         formData.append("author", form.author);
-        form.categories.forEach((catId) => formData.append("categories[]", catId.toString()));
+        form.categories.forEach((cat) => formData.append("categories[]", cat.id.toString()));
         if (form.images) {
-            form.images.forEach((image) => formData.append("images[]", image));
+            form.images.forEach((image) => {
+                if (image instanceof File) {
+                    formData.append("images[]", image); // cuma kirim file baru ke server
+                }
+            });
         }
 
         try {
-            const token = localStorage.getItem("token"); // Ambil token dari localStorage
+            const token = localStorage.getItem("token");
             const response = await fetch(`http://127.0.0.1:8000/api/articles/${article.id}`, {
-                method: "PUT",
+                method: "POST", // Laravel biasanya butuh POST + _method=PUT untuk multipart
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
@@ -103,15 +130,15 @@ export default function EditArticleModal({ article, onClose, onSave }: Props) {
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.message || "Gagal memperbarui artikel");
+                throw new Error(data.message || "Failed to update article");
             }
 
-            onSave({ ...form, ...data.article, images: data.article.images }); // Perbarui dengan data dari server
+            onSave({ ...form, ...data.article, images: data.article.images });
             onClose();
             Swal.fire("Success!", "Article updated successfully.", "success");
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Terjadi kesalahan");
-            Swal.fire("Error!", "Gagal memperbarui artikel.", "error");
+            setError(err instanceof Error ? err.message : "An unexpected error occurred");
+            Swal.fire("Error!", "Failed to update article.", "error");
         } finally {
             setLoading(false);
         }
@@ -125,6 +152,7 @@ export default function EditArticleModal({ article, onClose, onSave }: Props) {
                 {error && <div className="text-red-500 text-sm mb-2">{error}</div>}
 
                 <div className="space-y-4">
+                    {/* Title */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Title</label>
                         <input
@@ -137,6 +165,7 @@ export default function EditArticleModal({ article, onClose, onSave }: Props) {
                         />
                     </div>
 
+                    {/* Content */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Content</label>
                         <textarea
@@ -149,6 +178,7 @@ export default function EditArticleModal({ article, onClose, onSave }: Props) {
                         />
                     </div>
 
+                    {/* Author */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Author</label>
                         <input
@@ -161,26 +191,33 @@ export default function EditArticleModal({ article, onClose, onSave }: Props) {
                         />
                     </div>
 
+                    {/* Categories */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Categories</label>
                         <div className="flex flex-wrap gap-2 mt-2">
-                            {categories.map((cat) => (
-                                <button
-                                    type="button"
-                                    key={cat}
-                                    onClick={() => handleCategoryChange(cat)}
-                                    className={`px-3 py-1 text-sm border rounded-md ${form.categories.includes(categoryIds[cat] || 0)
+                            {categories.map((cat) => {
+                                const catId = categoryIds[cat];
+                                const isActive = form.categories.some((c) => c.id === catId);
+
+                                return (
+                                    <button
+                                        type="button"
+                                        key={cat}
+                                        onClick={() => handleCategoryChange(cat)}
+                                        className={`px-3 py-1 text-sm border rounded-md transition ${isActive
                                             ? "bg-[#134280] text-white border-[#134280]"
-                                            : "bg-white text-gray-700 border-gray-300"
-                                        }`}
-                                    disabled={!categoryIds[cat]} // Nonaktifkan jika ID belum dimuat
-                                >
-                                    {cat}
-                                </button>
-                            ))}
+                                            : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+                                            }`}
+                                        disabled={!catId}
+                                    >
+                                        {cat}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 
+                    {/* Images */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Upload Images (max 2)</label>
                         <input
@@ -190,7 +227,7 @@ export default function EditArticleModal({ article, onClose, onSave }: Props) {
                             onChange={handleImageChange}
                             className="mt-1"
                         />
-                        {form.images.length > 0 && (
+                        {form.images && form.images.length > 0 && (
                             <p className="text-sm text-gray-500 mt-1">
                                 {form.images.length} file(s) selected
                             </p>
@@ -198,6 +235,7 @@ export default function EditArticleModal({ article, onClose, onSave }: Props) {
                     </div>
                 </div>
 
+                {/* Actions */}
                 <div className="flex justify-end mt-6 gap-2">
                     <button
                         onClick={onClose}

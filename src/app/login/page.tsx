@@ -1,63 +1,78 @@
 "use client";
 
 import { useState } from "react";
-import { Lock, Mail } from "lucide-react";
+import { Lock, Mail, Eye, EyeOff } from "lucide-react";
+import Image from "next/image";
 
 export default function LoginPage() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
+    const [loading, setLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setLoading(true);
 
         try {
+            // 1️⃣ Ambil CSRF cookie dari Laravel
+            await fetch("http://127.0.0.1:8000/sanctum/csrf-cookie", {
+                method: "GET",
+                credentials: "include", // penting agar cookie tersimpan
+            });
+
+            // 2️⃣ Kirim data login
             const response = await fetch("http://127.0.0.1:8000/api/login", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     "Accept": "application/json",
                 },
-                body: JSON.stringify({
-                    email,
-                    password,
-                }),
+                credentials: "include", // 🧩 tambahkan ini
+                body: JSON.stringify({ email, password }),
             });
 
             const data = await response.json();
 
             if (!response.ok) {
-                alert(data.message || "Login gagal!");
+                alert(data.message || "Login gagal! Periksa kembali email dan password.");
+                setLoading(false);
                 return;
             }
 
-            // simpan token ke localStorage
+            // 3️⃣ Simpan token & user ke localStorage
             localStorage.setItem("token", data.token);
+            localStorage.setItem("user", JSON.stringify(data.user));
 
-            alert("Login berhasil!");
-            // contoh redirect ke halaman dashboard
-            window.location.href = "/";
-
+            alert("✅ Login berhasil!");
+            window.location.href = "/dashboard";
         } catch (error) {
-            console.error(error);
-            alert("Terjadi kesalahan koneksi ke server");
+            console.error("Login error:", error);
+            alert("❌ Terjadi kesalahan koneksi ke server");
+        } finally {
+            setLoading(false);
         }
     };
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 via-white to-blue-200">
             <div className="w-full max-w-md bg-white/90 backdrop-blur-sm p-8 rounded-2xl shadow-xl border border-gray-100">
-                {/* Logo / Title */}
+                {/* Header */}
                 <div className="text-center mb-6">
-                    <div className="w-14 h-14 mx-auto flex items-center justify-center rounded-full bg-blue-600 text-white font-bold text-xl shadow-md">
-                        B
-                    </div>
+                    <Image
+                        src="/logo.png"
+                        alt="Logo Beehive"
+                        width={80}
+                        height={80}
+                        className="mx-auto rounded-full"
+                        priority
+                    />
                     <h2 className="text-2xl font-bold text-gray-800 mt-3">Beehive Admin</h2>
                     <p className="text-sm text-gray-500">Sign in to your account</p>
                 </div>
 
                 {/* Form */}
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* Email */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Email</label>
                         <div className="relative mt-1">
@@ -68,37 +83,47 @@ export default function LoginPage() {
                                 onChange={(e) => setEmail(e.target.value)}
                                 required
                                 placeholder="Enter your email"
-                                className="w-full pl-10 pr-4 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                className="w-full pl-10 pr-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                     </div>
 
-                    {/* Password */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Password</label>
                         <div className="relative mt-1">
                             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                             <input
-                                type="password"
+                                type={showPassword ? "text" : "password"}
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 required
                                 placeholder="Enter your password"
-                                className="w-full pl-10 pr-4 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                className="w-full pl-10 pr-10 py-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500"
                             />
+                            {showPassword ? (
+                                <EyeOff
+                                    onClick={() => setShowPassword(false)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5 cursor-pointer"
+                                />
+                            ) : (
+                                <Eye
+                                    onClick={() => setShowPassword(true)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5 cursor-pointer"
+                                />
+                            )}
                         </div>
                     </div>
 
-                    {/* Submit */}
                     <button
                         type="submit"
-                        className="w-full bg-blue-600 hover:bg-blue-700 transition text-white font-medium py-2 rounded-md shadow-md hover:shadow-lg"
+                        disabled={loading}
+                        className={`w-full bg-blue-600 hover:bg-blue-700 transition text-white font-medium py-2 rounded-md shadow-md ${loading ? "opacity-70 cursor-not-allowed" : ""
+                            }`}
                     >
-                        Sign In
+                        {loading ? "Processing..." : "Sign In"}
                     </button>
                 </form>
 
-                {/* Footer */}
                 <p className="text-xs text-center text-gray-500 mt-6">
                     © {new Date().getFullYear()} Beehive Drones. All rights reserved.
                 </p>

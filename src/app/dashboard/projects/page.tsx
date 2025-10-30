@@ -8,15 +8,17 @@ export default function ProjectsPage() {
     return (
         <DashboardLayout>
             <div className="space-y-6">
-                <h1 className="text-xl font-semibold text-gray-800">Kelola Project</h1>
-                <p className="text-gray-600 text-sm">
-                    Tambahkan project baru atau lihat daftar project yang sudah ada.
-                </p>
+                <div>
+                    <h1 className="text-xl font-semibold text-gray-800">Manage Projects</h1>
+                    <p className="text-gray-600 text-sm">
+                        Add a new project or view the list of existing projects.
+                    </p>
+                </div>
+                
+                {/* Add project form */}
+                <ProjectForm onSuccess={() => console.log("Project added!")} />
 
-                {/* Form tambah project */}
-                <ProjectForm onSuccess={() => console.log("Project ditambahkan!")} />
-
-                {/* Tabel daftar project */}
+                {/* Project list table */}
                 <ProjectTable />
             </div>
         </DashboardLayout>
