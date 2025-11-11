@@ -1,10 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 
 interface CareerFormProps {
     onSuccess: () => void;
 }
+
+// Import Markdown Editor secara dinamis biar gak error di SSR
+const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
 
 export default function CareerForm({ onSuccess }: CareerFormProps) {
     const [title, setTitle] = useState("");
@@ -28,8 +32,9 @@ export default function CareerForm({ onSuccess }: CareerFormProps) {
         };
 
         console.log("Career saved:", newCareer);
-        onSuccess(); // ✅ callback saat sukses
-        // reset form kalau mau
+        onSuccess();
+
+        // Reset form setelah simpan
         setTitle("");
         setQualifications("");
         setBenefits("");
@@ -40,58 +45,80 @@ export default function CareerForm({ onSuccess }: CareerFormProps) {
     };
 
     return (
-        <div className="bg-white rounded-xl shadow-lg p-6 w-full">
-            <h2 className="text-lg font-semibold mb-4">Add New Career</h2>
+        <div className="bg-white rounded-xl shadow-lg p-6 w-full" data-color-mode="light">
+            <h2 className="text-lg font-semibold mb-4 text-gray-800">Add New Career</h2>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
+                {/* Title */}
                 <input
                     type="text"
                     placeholder="Career Title"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    className="w-full border px-3 py-2 rounded-md"
+                    className="w-full border px-3 py-2 rounded-md focus:outline-[#134280]"
+                    required
                 />
 
-                <textarea
-                    placeholder="Qualifications"
-                    value={qualifications}
-                    onChange={(e) => setQualifications(e.target.value)}
-                    rows={3}
-                    className="w-full border px-3 py-2 rounded-md"
-                />
+                {/* Qualifications */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Qualifications (Markdown)
+                    </label>
+                    <div className="border rounded-md p-2">
+                        <MDEditor
+                            value={qualifications}
+                            onChange={(value) => setQualifications(value || "")}
+                            height={200}
+                        />
+                    </div>
+                </div>
 
-                <textarea
-                    placeholder="Benefits"
-                    value={benefits}
-                    onChange={(e) => setBenefits(e.target.value)}
-                    rows={3}
-                    className="w-full border px-3 py-2 rounded-md"
-                />
+                {/* Benefits */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Benefits (Markdown)
+                    </label>
+                    <div className="border rounded-md p-2">
+                        <MDEditor
+                            value={benefits}
+                            onChange={(value) => setBenefits(value || "")}
+                            height={200}
+                        />
+                    </div>
+                </div>
 
-                <textarea
-                    placeholder="Key Responsibilities"
-                    value={keyResponsibilities}
-                    onChange={(e) => setKeyResponsibilities(e.target.value)}
-                    rows={3}
-                    className="w-full border px-3 py-2 rounded-md"
-                />
+                {/* Key Responsibilities */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Key Responsibilities (Markdown)
+                    </label>
+                    <div className="border rounded-md p-2">
+                        <MDEditor
+                            value={keyResponsibilities}
+                            onChange={(value) => setKeyResponsibilities(value || "")}
+                            height={200}
+                        />
+                    </div>
+                </div>
 
+                {/* Location */}
                 <input
                     type="text"
                     placeholder="Location"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    className="w-full border px-3 py-2 rounded-md"
+                    className="w-full border px-3 py-2 rounded-md focus:outline-[#134280]"
                 />
 
+                {/* Work Type */}
                 <div>
-                    <p className="text-sm font-medium mb-1">Work Type</p>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Work Type</label>
                     <select
                         value={workType}
                         onChange={(e) =>
                             setWorkType(e.target.value as "WFH" | "WFO" | "Hybrid")
                         }
-                        className="w-full border px-3 py-2 rounded-md"
+                        className="w-full border px-3 py-2 rounded-md focus:outline-[#134280]"
                     >
                         <option value="WFO">WFO</option>
                         <option value="WFH">WFH</option>
@@ -99,21 +126,22 @@ export default function CareerForm({ onSuccess }: CareerFormProps) {
                     </select>
                 </div>
 
+                {/* Deadline */}
                 <div>
-                    <p className="text-sm font-medium mb-1">Deadline</p>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Deadline</label>
                     <input
                         type="date"
                         value={deadline}
                         onChange={(e) => setDeadline(e.target.value)}
-                        className="w-full border px-3 py-2 rounded-md"
+                        className="w-full border px-3 py-2 rounded-md focus:outline-[#134280]"
                     />
                 </div>
             </div>
 
-            <div className="flex justify-end mt-4">
+            <div className="flex justify-end mt-5">
                 <button
                     onClick={handleSubmit}
-                    className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700"
+                    className="px-4 py-2 rounded-md bg-[#134280] text-white hover:bg-[#0f2e5c] transition"
                 >
                     Save
                 </button>

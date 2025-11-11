@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
+
+const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
 
 const categories = [
     "Drone Application",
@@ -134,16 +137,15 @@ export default function ArticleForm({ onSuccess }: { onSuccess: () => void }) {
                 />
             </div>
 
-            <div>
-                <label className="block text-sm font-medium text-gray-700">Content</label>
-                <textarea
-                    name="content"
-                    value={form.content}
-                    onChange={handleChange}
-                    rows={6}
-                    className="mt-1 w-full border rounded-md px-3 py-2 text-sm focus:outline-[#134280]"
-                    required
-                />
+            <div data-color-mode="light" className="w-full">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Content (Markdown)</label>
+                <div className="border rounded-md p-2">
+                    <MDEditor
+                        value={form.content}
+                        onChange={(value) => setForm({ ...form, content: value || "", error: "" })}
+                        height={300}
+                    />
+                </div>
             </div>
 
             <div>

@@ -15,20 +15,18 @@ export default function LoginPage() {
         setLoading(true);
 
         try {
-            // 1️⃣ Ambil CSRF cookie dari Laravel
             await fetch("http://127.0.0.1:8000/sanctum/csrf-cookie", {
                 method: "GET",
-                credentials: "include", // penting agar cookie tersimpan
+                credentials: "include",
             });
 
-            // 2️⃣ Kirim data login
             const response = await fetch("http://127.0.0.1:8000/api/login", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     "Accept": "application/json",
                 },
-                credentials: "include", // 🧩 tambahkan ini
+                credentials: "include",
                 body: JSON.stringify({ email, password }),
             });
 
