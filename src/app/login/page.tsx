@@ -15,18 +15,12 @@ export default function LoginPage() {
         setLoading(true);
 
         try {
-            await fetch("http://127.0.0.1:8000/sanctum/csrf-cookie", {
-                method: "GET",
-                credentials: "include",
-            });
-
             const response = await fetch("http://127.0.0.1:8000/api/login", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     "Accept": "application/json",
                 },
-                credentials: "include",
                 body: JSON.stringify({ email, password }),
             });
 
@@ -38,12 +32,12 @@ export default function LoginPage() {
                 return;
             }
 
-            // 3️⃣ Simpan token & user ke localStorage
+            // ✅ Simpan token dan user ke localStorage
             localStorage.setItem("token", data.token);
             localStorage.setItem("user", JSON.stringify(data.user));
 
             alert("✅ Login berhasil!");
-            window.location.href = "/dashboard";
+            window.location.href = "/dashboard"; // arahkan ke dashboard FE
         } catch (error) {
             console.error("Login error:", error);
             alert("❌ Terjadi kesalahan koneksi ke server");
@@ -115,8 +109,7 @@ export default function LoginPage() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className={`w-full bg-blue-600 hover:bg-blue-700 transition text-white font-medium py-2 rounded-md shadow-md ${loading ? "opacity-70 cursor-not-allowed" : ""
-                            }`}
+                        className={`w-full bg-blue-600 hover:bg-blue-700 transition text-white font-medium py-2 rounded-md shadow-md ${loading ? "opacity-70 cursor-not-allowed" : ""}`}
                     >
                         {loading ? "Processing..." : "Sign In"}
                     </button>

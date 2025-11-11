@@ -1,17 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function ProjectForm({ onSuccess }: { onSuccess: () => void }) {
     const [loading, setLoading] = useState(false);
+    const [dropdowns, setDropdowns] = useState({ product_services: [], industries: [] });
     const [form, setForm] = useState({
         title: "",
         description: "",
         location: "",
         goal: "",
-        productService: "",
-        industry: "",
+        product_service_id: "",
+        industry_id: "",
     });
+
+    const apiBase = "http://127.0.0.1:8000";
+
+    useEffect(() => {
+        const fetchDropdowns = async () => {
+            const token = localStorage.getItem("token");
+            try {
+                const res = await fetch(`${apiBase}/api/projects/dropdowns`, {
+                    headers: {
+                        "Authorization": `Bearer ${token}`,
+                        "Accept": "application/json",
+                    },
+                });
+                const data = await res.json();
+                setDropdowns(data);
+            } catch (err) {
+                console.error("❌ Error fetching dropdowns:", err);
+            }
+        };
+        fetchDropdowns();
+    }, []);
 
     const handleChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -23,21 +45,54 @@ export default function ProjectForm({ onSuccess }: { onSuccess: () => void }) {
         e.preventDefault();
         setLoading(true);
 
-        // TODO: Call Laravel API here
-        console.log("New Project:", form);
+        const token = localStorage.getItem("token");
+        if (!token) {
+            alert("Please login first.");
+            return;
+        }
 
-        setTimeout(() => {
-            setLoading(false);
-            setForm({
-                title: "",
-                description: "",
-                location: "",
-                goal: "",
-                productService: "",
-                industry: "",
+        try {
+            const response = await fetch(`${apiBase}/api/projects`, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                body: JSON.stringify({
+                    title: form.title,
+                    description: form.description,
+                    location: form.location,
+                    goal: form.goal,
+                    product_service_id: form.product_service_id,
+                    industry_id: form.industry_id,
+                }),
             });
-            onSuccess();
-        }, 1000);
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                console.error("Error:", data);
+                alert("Failed to save project: " + (data.message || "Validation error"));
+            } else {
+                console.log("✅ Project created:", data);
+                alert("Project created successfully!");
+                onSuccess();
+                setForm({
+                    title: "",
+                    description: "",
+                    location: "",
+                    goal: "",
+                    product_service_id: "",
+                    industry_id: "",
+                });
+            }
+        } catch (error) {
+            console.error("❌ Error submitting project:", error);
+            alert("Something went wrong.");
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -110,48 +165,37 @@ export default function ProjectForm({ onSuccess }: { onSuccess: () => void }) {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-                {/* Product/Service */}
+                {/* Product / Service */}
                 <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                        Product / Service
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700">Product / Service</label>
                     <select
-                        name="productService"
-                        value={form.productService}
+                        name="product_service_id"
+                        value={form.product_service_id}
                         onChange={handleChange}
                         className="mt-1 w-full border rounded-md px-3 py-2 text-sm focus:outline-[#134280]"
                         required
                     >
                         <option value="">-- Select --</option>
-                        <option value="Drone Service">Drone Service</option>
-                        <option value="Advance Manufacturing">Advance Manufacturing</option>
-                        <option value="R&D Service">R&D Service</option>
-                        <option value="Training">Training</option>
+                        {dropdowns.product_services.map((ps: any) => (
+                            <option key={ps.id} value={ps.id}>{ps.name}</option>
+                        ))}
                     </select>
                 </div>
 
                 {/* Industry */}
                 <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                        Industry
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700">Industry</label>
                     <select
-                        name="industry"
-                        value={form.industry}
+                        name="industry_id"
+                        value={form.industry_id}
                         onChange={handleChange}
                         className="mt-1 w-full border rounded-md px-3 py-2 text-sm focus:outline-[#134280]"
                         required
                     >
                         <option value="">-- Select --</option>
-                        <option value="Forestry">Forestry</option>
-                        <option value="Agriculture & Plantations">
-                            Agriculture & Plantations
-                        </option>
-                        <option value="Mining & Minerals">Mining & Minerals</option>
-                        <option value="Construction & Real Estate">
-                            Construction & Real Estate
-                        </option>
-                        <option value="Village Development">Village Development</option>
+                        {dropdowns.industries.map((ind: any) => (
+                            <option key={ind.id} value={ind.id}>{ind.name}</option>
+                        ))}
                     </select>
                 </div>
             </div>

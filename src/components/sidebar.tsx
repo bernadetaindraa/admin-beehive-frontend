@@ -46,17 +46,18 @@ export default function Sidebar() {
             });
 
             if (!response.ok) {
-                console.warn("Logout API failed, but proceeding locally...");
+                console.warn("Logout API failed (token mungkin sudah invalid).");
             }
         } catch (error) {
             console.error("Logout error:", error);
         } finally {
-            // hapus token & user dari localStorage
+            // 🔐 bersihkan semua data auth di browser
             localStorage.removeItem("token");
             localStorage.removeItem("user");
 
+            // 🧭 redirect dengan UX halus
             alert("Logout berhasil!");
-            router.push("/login");
+            router.replace("/login"); // pakai replace biar ga bisa back ke dashboard
         }
     };
 
