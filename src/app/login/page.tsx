@@ -32,12 +32,9 @@ export default function LoginPage() {
                 return;
             }
 
-            // ✅ Simpan token dan user ke localStorage
             localStorage.setItem("token", data.token);
             localStorage.setItem("user", JSON.stringify(data.user));
-
-            alert("✅ Login berhasil!");
-            window.location.href = "/dashboard"; // arahkan ke dashboard FE
+            window.location.href = "/dashboard";
         } catch (error) {
             console.error("Login error:", error);
             alert("❌ Terjadi kesalahan koneksi ke server");

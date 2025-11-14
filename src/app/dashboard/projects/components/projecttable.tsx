@@ -13,8 +13,11 @@ export interface Project {
     description: string;
     product_service_id?: number;
     industry_id?: number;
-    productService?: { name: string };
-    industry?: { name: string };
+    product_service?: { id: number; name: string };
+    industry?: { id: number; name: string };
+    image?: string | null;
+    created_at?: string;
+    updated_at?: string;
 }
 
 export default function ProjectTable() {
@@ -48,6 +51,7 @@ export default function ProjectTable() {
             }
 
             const data = await res.json();
+            console.log("Full API Response:", data); // LIHAT DI CONSOLE
             setProjects(data);
         } catch (error) {
             console.error("❌ Error fetching projects:", error);
@@ -134,24 +138,26 @@ export default function ProjectTable() {
                                 <td className="p-2 font-medium">{p.title}</td>
                                 <td className="p-2">{p.location}</td>
                                 <td className="p-2">{p.goal}</td>
-                                <td className="p-2">{p.productService?.name || "-"}</td>
+                                <td className="p-2">{p.product_service?.name || "-"}</td>
                                 <td className="p-2">{p.industry?.name || "-"}</td>
-                                <td className="p-2 text-center">
-                                    <div className="flex justify-center items-center space-x-2">
+                                <td className="p-3 text-center">
+                                    <div className="flex justify-center gap-3">
+                                        {/* Edit Button */}
                                         <button
                                             onClick={() => setEditingProject(p)}
-                                            className="p-2 rounded-md bg-blue-500 text-white hover:bg-blue-600"
-                                            title="Edit"
+                                            className="p-2 rounded-full hover:bg-blue-100 text-blue-600 transition group"
+                                            title="Edit Project"
                                         >
-                                            <Edit size={16} />
+                                            <Edit className="w-5 h-5 group-hover:scale-110 transition" />
                                         </button>
 
+                                        {/* Delete Button */}
                                         <button
                                             onClick={() => handleDelete(p.id)}
-                                            className="p-2 rounded-md bg-red-500 text-white hover:bg-red-600"
-                                            title="Delete"
+                                            className="p-2 rounded-full hover:bg-red-100 text-red-600 transition group"
+                                            title="Delete Project"
                                         >
-                                            <Trash size={16} />
+                                            <Trash className="w-5 h-5 group-hover:scale-110 transition" />
                                         </button>
                                     </div>
                                 </td>

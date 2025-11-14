@@ -1,18 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Article } from "./articletable";
 import Swal from "sweetalert2";
+import { Article } from "./articletable";
 
-const categories = [
-    "Drone Application",
-    "Technology & Innovation",
-    "Partnership & Collaboration",
-    "Events & Projects",
-    "Company News",
-    "Product & Services",
-    "Impact & Sustainability",
-];
+interface Category {
+    id: number;
+    name: string;
+}
 
 interface Props {
     article: Article;
@@ -20,235 +15,266 @@ interface Props {
     onSave: (updated: Article) => void;
 }
 
-type EditableArticle = Omit<Article, "images"> & {
-    images: (File | { id: number; image_url: string })[];
-};
-
-
 export default function EditArticleModal({ article, onClose, onSave }: Props) {
-    const [form, setForm] = useState<EditableArticle>({
-        ...article,
-        images: article.images || [],
+    const [form, setForm] = useState({
+        title: article.title || "",
+        content: article.content || "",
+        author: article.author || "",
+        categories: article.categories?.map((c) => c.id) || [],
+        image: null as File | null,
+        current_image: article.image || "",
+        image_url: article.image_url || "",
     });
-    const [categoryIds, setCategoryIds] = useState<{ [key: string]: number }>({});
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
-    // Ambil kategori dari backend dan inisialisasi form
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [loading, setLoading] = useState(false);
+    const apiBase = "http://127.0.0.1:8000";
+
     useEffect(() => {
         const fetchCategories = async () => {
+            const token = localStorage.getItem("token");
+            if (!token) return;
+
             try {
-                const response = await fetch("http://127.0.0.1:8000/api/categories");
-                if (!response.ok) throw new Error("Failed to fetch categories");
-                const data = await response.json();
-
-                // Mapping nama kategori ke ID
-                const idsMap = data.reduce(
-                    (acc: { [key: string]: number }, cat: { id: number; name: string }) => {
-                        acc[cat.name] = cat.id;
-                        return acc;
-                    },
-                    {}
-                );
-                setCategoryIds(idsMap);
-
-                // Sinkronisasi kategori artikel yang ada
-                const updatedCategories = article.categories.map((cat) => ({
-                    id: idsMap[cat.name] || cat.id,
-                    name: cat.name,
-                }));
-
-                setForm((prev) => ({
-                    ...prev,
-                    categories: updatedCategories,
-                }));
-            } catch (err) {
-                setError(err instanceof Error ? err.message : "An unexpected error occurred");
+                const res = await fetch(`${apiBase}/api/articles/categories`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                if (!res.ok) throw new Error("Failed to load categories");
+                const data: Category[] = await res.json();
+                setCategories(data);
+            } catch {
+                Swal.fire("Error", "Failed to load categories", "error");
             }
         };
-
         fetchCategories();
-    }, [article.categories]);
+    }, []);
 
-    // Handle perubahan input teks
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        setForm({ ...form, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+        setForm((prev) => ({ ...prev, [name]: value }));
     };
 
-    // Handle perubahan kategori (klik tombol)
-    const handleCategoryChange = (cat: string) => {
-        const catId = categoryIds[cat] || 0;
-        if (!catId) return;
-
+    const handleCategoryChange = (catId: number) => {
         setForm((prev) => {
-            const exists = prev.categories.some((c) => c.id === catId);
-            return {
-                ...prev,
-                categories: exists
-                    ? prev.categories.filter((c) => c.id !== catId)
-                    : [...prev.categories, { id: catId, name: cat }],
-            };
+            const exists = prev.categories.includes(catId);
+            let newCats = exists
+                ? prev.categories.filter((id) => id !== catId)
+                : [...prev.categories, catId];
+            if (newCats.length > 2) newCats = newCats.slice(0, 2);
+            return { ...prev, categories: newCats };
         });
     };
 
-    // Handle upload gambar
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            const files = Array.from(e.target.files).slice(0, 2); // max 2 gambar
-            setForm((prev) => ({ ...prev, images: files }));
-        }
+        const file = e.target.files?.[0];
+        if (file) setForm((prev) => ({ ...prev, image: file }));
     };
 
-    // Handle simpan perubahan
+    const handleRemoveImage = () => {
+        setForm((prev) => ({ ...prev, image: null }));
+        const input = document.getElementById("image-upload-edit") as HTMLInputElement;
+        if (input) input.value = "";
+    };
+
     const handleSave = async () => {
+        if (!form.title || !form.content || !form.author || form.categories.length === 0) {
+            Swal.fire("Error", "Please fill all fields and select at least 1 category", "error");
+            return;
+        }
+
         setLoading(true);
-        setError(null);
+        const token = localStorage.getItem("token");
+        if (!token) {
+            Swal.fire("Error", "Authentication token not found. Please login again.", "error");
+            setLoading(false);
+            return;
+        }
 
         const formData = new FormData();
+        formData.append("_method", "PUT");
         formData.append("title", form.title);
         formData.append("content", form.content);
         formData.append("author", form.author);
-        form.categories.forEach((cat) => formData.append("categories[]", cat.id.toString()));
-        if (form.images) {
-            form.images.forEach((image) => {
-                if (image instanceof File) {
-                    formData.append("images[]", image); // cuma kirim file baru ke server
-                }
-            });
-        }
+        form.categories.forEach((cat, index) => {
+            formData.append(`categories[${index}]`, cat.toString());
+        });
+        if (form.image) formData.append("image", form.image);
 
         try {
-            const token = localStorage.getItem("token");
-            const response = await fetch(`http://127.0.0.1:8000/api/articles/${article.id}`, {
-                method: "POST", // Laravel biasanya butuh POST + _method=PUT untuk multipart
+            const res = await fetch(`${apiBase}/api/articles/${article.id}`, {
+                method: "POST",
                 headers: {
                     Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
                 },
                 body: formData,
             });
 
-            const data = await response.json();
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || "Failed to update article");
 
-            if (!response.ok) {
-                throw new Error(data.message || "Failed to update article");
-            }
+            onSave({
+                ...article,
+                ...data.article,
+                categories: data.article.categories || [],
+                image_url: data.article.image_url || "",
+                image: data.article.image || article.image,
+            });
 
-            onSave({ ...form, ...data.article, images: data.article.images });
             onClose();
-            Swal.fire("Success!", "Article updated successfully.", "success");
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "An unexpected error occurred");
-            Swal.fire("Error!", "Failed to update article.", "error");
+            Swal.fire({ title: "Success!", text: "Article updated successfully.", icon: "success", timer: 1500, showConfirmButton: false });
+        } catch (err: any) {
+            Swal.fire("Error!", err.message, "error");
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
-            <div className="bg-white p-6 rounded-lg shadow-lg w-[600px]">
-                <h3 className="text-lg font-semibold mb-4 text-gray-800">Edit Article</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
+                <h3 className="mb-5 text-2xl font-bold text-gray-800">Edit Article</h3>
 
-                {error && <div className="text-red-500 text-sm mb-2">{error}</div>}
-
-                <div className="space-y-4">
-                    {/* Title */}
+                <div className="space-y-5">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Title</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
                         <input
                             type="text"
                             name="title"
                             value={form.title}
                             onChange={handleChange}
-                            className="w-full border px-3 py-2 rounded-md text-sm"
-                            required
+                            className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-[#134280] focus:ring-2 focus:ring-[#134280]/20 transition"
+                            placeholder="Enter article title"
                         />
                     </div>
 
-                    {/* Content */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Content</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Content</label>
                         <textarea
                             name="content"
                             value={form.content}
                             onChange={handleChange}
-                            rows={5}
-                            className="w-full border px-3 py-2 rounded-md text-sm"
-                            required
+                            rows={6}
+                            className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-[#134280] focus:ring-2 focus:ring-[#134280]/20 transition resize-none"
+                            placeholder="Write article content..."
                         />
                     </div>
 
-                    {/* Author */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Author</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Author</label>
                         <input
                             type="text"
                             name="author"
                             value={form.author}
                             onChange={handleChange}
-                            className="w-full border px-3 py-2 rounded-md text-sm"
-                            required
+                            className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-[#134280] focus:ring-2 focus:ring-[#134280]/20 transition"
+                            placeholder="Author name"
                         />
                     </div>
 
-                    {/* Categories */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Categories</label>
-                        <div className="flex flex-wrap gap-2 mt-2">
-                            {categories.map((cat) => {
-                                const catId = categoryIds[cat];
-                                const isActive = form.categories.some((c) => c.id === catId);
-
-                                return (
-                                    <button
-                                        type="button"
-                                        key={cat}
-                                        onClick={() => handleCategoryChange(cat)}
-                                        className={`px-3 py-1 text-sm border rounded-md transition ${isActive
-                                            ? "bg-[#134280] text-white border-[#134280]"
-                                            : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
-                                            }`}
-                                        disabled={!catId}
-                                    >
-                                        {cat}
-                                    </button>
-                                );
-                            })}
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Categories <span className="text-gray-500">(max 2)</span>
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                            {categories.length === 0 ? (
+                                <p className="text-sm text-gray-500">Loading categories...</p>
+                            ) : (
+                                categories.map((cat) => {
+                                    const isActive = form.categories.includes(cat.id);
+                                    return (
+                                        <button
+                                            key={cat.id}
+                                            type="button"
+                                            onClick={() => handleCategoryChange(cat.id)}
+                                            className={`px-4 py-2 text-sm font-medium rounded-full border transition-all ${isActive
+                                                ? "bg-[#134280] text-white border-[#134280] shadow-sm"
+                                                : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                                                }`}
+                                        >
+                                            {cat.name}
+                                        </button>
+                                    );
+                                })
+                            )}
                         </div>
                     </div>
 
-                    {/* Images */}
+                    {form.current_image && !form.image && (
+                        <div className="flex items-center gap-3">
+                            <div className="group relative">
+                                <img
+                                    src={form.image_url || `${apiBase}/storage/${form.current_image}`}
+                                    alt="Current"
+                                    className="h-24 w-24 rounded-lg border object-cover shadow-sm"
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/30 opacity-0 transition group-hover:opacity-100">
+                                    <span className="text-xs font-medium text-white">Current</span>
+                                </div>
+                            </div>
+                            <span className="text-xs text-gray-600">Current image</span>
+                        </div>
+                    )}
+
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Upload Images (max 2)</label>
-                        <input
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            onChange={handleImageChange}
-                            className="mt-1"
-                        />
-                        {form.images && form.images.length > 0 && (
-                            <p className="text-sm text-gray-500 mt-1">
-                                {form.images.length} file(s) selected
-                            </p>
-                        )}
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Upload New Image (optional)</label>
+                        <label
+                            htmlFor="image-upload-edit"
+                            className="flex h-32 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 transition hover:border-[#134280] hover:bg-gray-100"
+                        >
+                            <svg className="mb-2 h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                            </svg>
+                            <p className="text-xs text-gray-500">Click to upload image</p>
+                            <p className="mt-1 text-xs text-gray-400">PNG, JPG up to 2MB</p>
+                        </label>
+                        <input id="image-upload-edit" type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
                     </div>
+
+                    {form.image && (
+                        <div className="flex items-center gap-3">
+                            <img
+                                src={URL.createObjectURL(form.image)}
+                                alt="Preview"
+                                className="h-24 w-24 rounded-lg border object-cover shadow-sm"
+                            />
+                            <div className="flex flex-col">
+                                <p className="text-xs font-medium text-gray-700">{form.image.name}</p>
+                                <button
+                                    type="button"
+                                    onClick={handleRemoveImage}
+                                    className="mt-1 text-xs font-medium text-red-600 hover:text-red-700"
+                                >
+                                    Remove
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
-                {/* Actions */}
-                <div className="flex justify-end mt-6 gap-2">
+                <div className="mt-8 flex justify-end gap-3">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 text-sm bg-gray-200 rounded-md hover:bg-gray-300"
+                        className="rounded-lg border border-gray-300 px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleSave}
                         disabled={loading}
-                        className="px-4 py-2 text-sm bg-[#134280] text-white rounded-md hover:bg-[#0f2e5c]"
+                        className="flex items-center gap-2 rounded-lg bg-[#134280] px-6 py-2.5 text-sm font-medium text-white transition hover:bg-[#0f2e5c] disabled:opacity-50"
                     >
-                        {loading ? "Saving..." : "Save Changes"}
+                        {loading ? (
+                            <>
+                                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                                </svg>
+                                Saving...
+                            </>
+                        ) : (
+                            "Save Changes"
+                        )}
                     </button>
                 </div>
             </div>

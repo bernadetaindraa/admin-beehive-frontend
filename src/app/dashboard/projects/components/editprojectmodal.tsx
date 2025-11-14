@@ -3,6 +3,11 @@
 import { useState, useEffect } from "react";
 import { Project } from "./projecttable";
 
+interface Dropdown {
+    product_services: { id: number; name: string }[];
+    industries: { id: number; name: string }[];
+}
+
 interface Props {
     project: Project;
     onClose: () => void;
@@ -11,39 +16,21 @@ interface Props {
 
 export default function EditProjectModal({ project, onClose, onSave }: Props) {
     const [form, setForm] = useState({
-        id: "",
-        title: "",
-        description: "",
-        location: "",
-        goal: "",
-        product_service_id: "",
-        industry_id: "",
+        id: String(project.id),
+        title: project.title || "",
+        description: project.description || "",
+        location: project.location || "",
+        goal: project.goal || "",
+        product_service_id: String(project.product_service_id || ""),
+        industry_id: String(project.industry_id || ""),
+        image: null as File | null,
+        current_image: project.image || "",
     });
 
+    const [dropdowns, setDropdowns] = useState<Dropdown>({ product_services: [], industries: [] });
     const [loading, setLoading] = useState(false);
-    const [dropdowns, setDropdowns] = useState({
-        product_services: [] as any[],
-        industries: [] as any[],
-    });
-
     const apiBase = "http://127.0.0.1:8000";
 
-    // 🔹 Update form ketika prop project berubah
-    useEffect(() => {
-        if (project) {
-            setForm({
-                id: String(project.id),
-                title: project.title || "",
-                description: project.description || "",
-                location: project.location || "",
-                goal: project.goal || "",
-                product_service_id: String(project.product_service_id || ""),
-                industry_id: String(project.industry_id || ""),
-            });
-        }
-    }, [project]);
-
-    // 🔹 Ambil data dropdown (pakai token)
     useEffect(() => {
         const fetchDropdowns = async () => {
             const token = localStorage.getItem("token");
@@ -51,29 +38,36 @@ export default function EditProjectModal({ project, onClose, onSave }: Props) {
 
             try {
                 const res = await fetch(`${apiBase}/api/projects/dropdowns`, {
-                    headers: {
-                        "Authorization": `Bearer ${token}`,
-                        "Accept": "application/json",
-                    },
+                    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
                 });
-                if (!res.ok) throw new Error("Failed to fetch dropdowns");
+                if (!res.ok) throw new Error("Failed to load dropdowns");
                 const data = await res.json();
                 setDropdowns(data);
             } catch (err) {
-                console.error("❌ Error fetching dropdowns:", err);
+                console.error("Failed to fetch dropdowns:", err);
             }
         };
         fetchDropdowns();
     }, []);
 
-    // 🔹 Handle perubahan input
     const handleChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
     ) => {
-        setForm({ ...form, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+        setForm((prev) => ({ ...prev, [name]: value }));
     };
 
-    // 🔹 Handle submit form
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) setForm((prev) => ({ ...prev, image: file }));
+    };
+
+    const handleRemoveImage = () => {
+        setForm((prev) => ({ ...prev, image: null }));
+        const input = document.getElementById("image-upload-edit") as HTMLInputElement;
+        if (input) input.value = "";
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -81,171 +75,214 @@ export default function EditProjectModal({ project, onClose, onSave }: Props) {
         const token = localStorage.getItem("token");
         if (!token) {
             alert("Please login first.");
+            setLoading(false);
             return;
         }
 
+        const formData = new FormData();
+        formData.append("_method", "PUT");
+        formData.append("title", form.title);
+        formData.append("description", form.description);
+        formData.append("location", form.location);
+        formData.append("goal", form.goal);
+        formData.append("product_service_id", form.product_service_id);
+        formData.append("industry_id", form.industry_id);
+        if (form.image) formData.append("image", form.image);
+
         try {
             const res = await fetch(`${apiBase}/api/projects/${form.id}`, {
-                method: "POST", // ✅ sesuai route-mu yang pakai POST untuk update
-                headers: {
-                    "Authorization": `Bearer ${token}`,
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                },
-                body: JSON.stringify({
-                    title: form.title,
-                    description: form.description,
-                    location: form.location,
-                    goal: form.goal,
-                    product_service_id: form.product_service_id,
-                    industry_id: form.industry_id,
-                }),
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}` },
+                body: formData,
             });
 
             const data = await res.json();
-
             if (!res.ok) {
-                console.error("❌ Validation error:", data);
                 alert("Failed to update project: " + (data.message || "Validation error"));
-            } else {
-                console.log("✅ Project updated:", data);
-                alert("Project updated successfully!");
-                onSave(data);
-                onClose();
+                return;
             }
+
+            onSave(data.project || data);
+            onClose();
         } catch (err) {
-            console.error("❌ Error updating project:", err);
-            alert("Something went wrong while updating.");
+            console.error("Error updating project:", err);
+            alert("An error occurred while saving.");
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <form
                 onSubmit={handleSubmit}
-                className="bg-white p-6 rounded-lg shadow-lg w-[500px] space-y-4"
+                className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-xl"
             >
-                <h3 className="text-lg font-semibold text-gray-800">Edit Project</h3>
+                <h3 className="mb-5 text-2xl font-bold text-gray-800">Edit Project</h3>
 
-                {/* Title */}
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                        Project Title
-                    </label>
-                    <input
-                        type="text"
-                        name="title"
-                        value={form.title}
-                        onChange={handleChange}
-                        className="mt-1 w-full border rounded-md px-3 py-2 text-sm focus:outline-[#134280]"
-                        required
-                    />
-                </div>
-
-                {/* Description */}
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                        Description
-                    </label>
-                    <textarea
-                        name="description"
-                        value={form.description}
-                        onChange={handleChange}
-                        rows={3}
-                        className="mt-1 w-full border rounded-md px-3 py-2 text-sm focus:outline-[#134280]"
-                        required
-                    />
-                </div>
-
-                {/* Location & Goal */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-5">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                            Location
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Project Title</label>
                         <input
                             type="text"
-                            name="location"
-                            value={form.location}
+                            name="title"
+                            value={form.title}
                             onChange={handleChange}
-                            className="mt-1 w-full border rounded-md px-3 py-2 text-sm focus:outline-[#134280]"
+                            className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-[#134280] focus:ring-2 focus:ring-[#134280]/20 transition"
                             required
                         />
                     </div>
+
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                            Project Goal
-                        </label>
-                        <input
-                            type="text"
-                            name="goal"
-                            value={form.goal}
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                        <textarea
+                            name="description"
+                            value={form.description}
                             onChange={handleChange}
-                            className="mt-1 w-full border rounded-md px-3 py-2 text-sm focus:outline-[#134280]"
+                            rows={4}
+                            className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-[#134280] focus:ring-2 focus:ring-[#134280]/20 transition resize-none"
                             required
                         />
                     </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                            <input
+                                type="text"
+                                name="location"
+                                value={form.location}
+                                onChange={handleChange}
+                                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-[#134280] focus:ring-2 focus:ring-[#134280]/20 transition"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Project Goal</label>
+                            <input
+                                type="text"
+                                name="goal"
+                                value={form.goal}
+                                onChange={handleChange}
+                                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-[#134280] focus:ring-2 focus:ring-[#134280]/20 transition"
+                                required
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Product / Service</label>
+                            <select
+                                name="product_service_id"
+                                value={form.product_service_id}
+                                onChange={handleChange}
+                                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-[#134280] focus:ring-2 focus:ring-[#134280]/20 transition"
+                                required
+                            >
+                                <option value="">-- Select --</option>
+                                {dropdowns.product_services.map((ps) => (
+                                    <option key={ps.id} value={ps.id}>
+                                        {ps.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Industry</label>
+                            <select
+                                name="industry_id"
+                                value={form.industry_id}
+                                onChange={handleChange}
+                                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-[#134280] focus:ring-2 focus:ring-[#134280]/20 transition"
+                                required
+                            >
+                                <option value="">-- Select --</option>
+                                {dropdowns.industries.map((ind) => (
+                                    <option key={ind.id} value={ind.id}>
+                                        {ind.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    {form.current_image && !form.image && (
+                        <div className="flex items-center gap-3">
+                            <div className="group relative">
+                                <img
+                                    src={`${apiBase}/storage/${form.current_image}`}
+                                    alt="Current"
+                                    className="h-24 w-24 rounded-lg border object-cover shadow-sm"
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/30 opacity-0 transition group-hover:opacity-100">
+                                    <span className="text-xs font-medium text-white">Current</span>
+                                </div>
+                            </div>
+                            <span className="text-xs text-gray-600">Current image</span>
+                        </div>
+                    )}
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Project Image (optional)</label>
+                        <label
+                            htmlFor="image-upload-edit"
+                            className="flex h-32 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 transition hover:border-[#134280] hover:bg-gray-100"
+                        >
+                            <svg className="mb-2 h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                            </svg>
+                            <p className="text-xs text-gray-500">Click to upload image</p>
+                            <p className="mt-1 text-xs text-gray-400">PNG, JPG up to 2MB</p>
+                        </label>
+                        <input id="image-upload-edit" type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+                    </div>
+
+                    {form.image && (
+                        <div className="flex items-center gap-3">
+                            <img
+                                src={URL.createObjectURL(form.image)}
+                                alt="Preview"
+                                className="h-24 w-24 rounded-lg border object-cover shadow-sm"
+                            />
+                            <div className="flex flex-col">
+                                <p className="text-xs font-medium text-gray-700">{form.image.name}</p>
+                                <button
+                                    type="button"
+                                    onClick={handleRemoveImage}
+                                    className="mt-1 text-xs font-medium text-red-600 hover:text-red-700"
+                                >
+                                    Remove
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
-                {/* Dropdowns */}
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                            Product / Service
-                        </label>
-                        <select
-                            name="product_service_id"
-                            value={form.product_service_id || ""}
-                            onChange={handleChange}
-                            className="mt-1 w-full border rounded-md px-3 py-2 text-sm focus:outline-[#134280]"
-                            required
-                        >
-                            <option value="">-- Select --</option>
-                            {dropdowns.product_services.map((ps: any) => (
-                                <option key={ps.id} value={ps.id}>
-                                    {ps.name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                            Industry
-                        </label>
-                        <select
-                            name="industry_id"
-                            value={form.industry_id || ""}
-                            onChange={handleChange}
-                            className="mt-1 w-full border rounded-md px-3 py-2 text-sm focus:outline-[#134280]"
-                            required
-                        >
-                            <option value="">-- Select --</option>
-                            {dropdowns.industries.map((ind: any) => (
-                                <option key={ind.id} value={ind.id}>
-                                    {ind.name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-
-                {/* Buttons */}
-                <div className="flex justify-end mt-6 gap-2">
+                <div className="mt-8 flex justify-end gap-3">
                     <button
                         type="button"
                         onClick={onClose}
-                        className="px-4 py-2 text-sm bg-gray-200 rounded-md hover:bg-gray-300"
+                        className="rounded-lg border border-gray-300 px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
                     >
                         Cancel
                     </button>
                     <button
                         type="submit"
                         disabled={loading}
-                        className="px-4 py-2 text-sm bg-[#134280] text-white rounded-md hover:bg-[#0f2e5c]"
+                        className="flex items-center gap-2 rounded-lg bg-[#134280] px-6 py-2.5 text-sm font-medium text-white transition hover:bg-[#0f2e5c] disabled:opacity-50"
                     >
-                        {loading ? "Saving..." : "Save Changes"}
+                        {loading ? (
+                            <>
+                                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                                </svg>
+                                Saving...
+                            </>
+                        ) : (
+                            "Save Changes"
+                        )}
                     </button>
                 </div>
             </form>

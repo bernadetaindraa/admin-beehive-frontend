@@ -1,7 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { Career } from "./careertable";
+import Swal from "sweetalert2";
+
+interface Career {
+    id: number;
+    title: string;
+    qualifications: string;
+    benefits: string | null;
+    responsibilities: string | null;
+    location: string;
+    work_type: "WFH" | "WFO" | "Hybrid";
+    deadline: string;
+}
 
 interface Props {
     career: Career;
@@ -10,158 +21,227 @@ interface Props {
 }
 
 export default function EditCareerModal({ career, onClose, onSave }: Props) {
-    const [form, setForm] = useState<Career>({ ...career });
+
+    const formatDateForInput = (dateStr: string) => {
+        return dateStr.split(" ")[0];
+    };
+
+    const [form, setForm] = useState({
+        id: career.id,
+        title: career.title,
+        qualifications: career.qualifications,
+        benefits: career.benefits ?? "",
+        responsibilities: career.responsibilities ?? "",
+        location: career.location,
+        work_type: career.work_type,
+        deadline: formatDateForInput(career.deadline),
+    });
+
     const [loading, setLoading] = useState(false);
+    const apiBase = "http://127.0.0.1:8000";
 
     const handleChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
     ) => {
-        setForm({ ...form, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+        setForm((prev) => ({ ...prev, [name]: value }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
 
-        setTimeout(() => {
-            onSave(form);
-            setLoading(false);
+        const original = {
+            title: career.title,
+            qualifications: career.qualifications,
+            benefits: career.benefits ?? "",
+            responsibilities: career.responsibilities ?? "",
+            location: career.location,
+            work_type: career.work_type,
+            deadline: formatDateForInput(career.deadline),
+        };
+
+        const payload: any = {};
+
+        (Object.keys(form) as Array<keyof typeof form>).forEach((key) => {
+            if (key === "id") return;
+
+            const newVal = form[key];
+            const oldVal = original[key];
+
+            if (newVal !== oldVal) {
+                if (["benefits", "responsibilities"].includes(key) && newVal === "") {
+                    payload[key] = null;
+                } else if (newVal !== "") {
+                    payload[key] = newVal;
+                }
+            }
+        });
+
+        const required = ["title", "qualifications", "location", "work_type", "deadline"] as const;
+        required.forEach((field) => {
+            if (!(field in payload)) {
+                payload[field] = form[field];
+            }
+        });
+
+        console.log("PUT Payload:", payload);
+
+        try {
+            const token = localStorage.getItem("token");
+            if (!token) throw new Error("Token tidak ditemukan.");
+
+            const res = await fetch(`${apiBase}/api/careers/${career.id}`, {
+                method: "PUT",
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                body: JSON.stringify(payload),
+            });
+
+            let data;
+            const contentType = res.headers.get("content-type");
+            if (contentType?.includes("application/json")) {
+                data = await res.json();
+            } else {
+                const text = await res.text();
+                console.error("Non-JSON:", text);
+                throw new Error("Server error.");
+            }
+
+            if (!res.ok) {
+                const errMsg = data.errors
+                    ? Object.values(data.errors).flat().join(", ")
+                    : data.message || "Gagal update";
+                throw new Error(errMsg);
+            }
+
+            const updatedCareer = {
+                ...data.career,
+                deadline: formatDateForInput(data.career.deadline),
+            };
+
+            onSave(updatedCareer);
             onClose();
-        }, 500);
+            Swal.fire("Sukses!", "Lowongan diperbarui.", "success");
+        } catch (err: any) {
+            console.error("Error:", err);
+            Swal.fire("Error!", err.message, "error");
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
-            <form
-                onSubmit={handleSubmit}
-                className="bg-white rounded-lg shadow-lg w-[600px] max-h-[90vh] flex flex-col"
-            >
-                {/* Header */}
+        <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50 overflow-y-auto">
+            <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-lg w-full max-w-2xl mx-4 my-8">
                 <div className="p-4 border-b">
                     <h3 className="text-lg font-semibold text-gray-800">Edit Career</h3>
                 </div>
 
-                {/* Body scrollable */}
-                <div className="p-6 overflow-y-auto space-y-4 flex-1">
-                    {/* Title */}
+                <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                            Career Title
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Career Title</label>
                         <input
                             type="text"
                             name="title"
                             value={form.title}
                             onChange={handleChange}
-                            className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
+                            className="w-full border rounded-md px-3 py-2 text-sm"
                             required
                         />
                     </div>
 
-                    {/* Qualifications */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                            Qualifications
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Qualifications</label>
                         <textarea
                             name="qualifications"
                             value={form.qualifications}
                             onChange={handleChange}
                             rows={3}
-                            className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
+                            className="w-full border rounded-md px-3 py-2 text-sm"
                             required
                         />
                     </div>
 
-                    {/* Benefits */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                            Benefits
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Benefits (Opsional)</label>
                         <textarea
                             name="benefits"
                             value={form.benefits}
                             onChange={handleChange}
                             rows={3}
-                            className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
+                            className="w-full border rounded-md px-3 py-2 text-sm"
+                            placeholder="Gaji, BPJS, dll."
                         />
                     </div>
 
-                    {/* Responsibilities */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                            Key Responsibilities
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Responsibilities (Opsional)</label>
                         <textarea
-                            name="keyResponsibilities"
-                            value={form.keyResponsibilities}
+                            name="responsibilities"
+                            value={form.responsibilities}
                             onChange={handleChange}
                             rows={3}
-                            className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
+                            className="w-full border rounded-md px-3 py-2 text-sm"
                         />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        {/* Location */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">
-                                Location
-                            </label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
                             <input
                                 type="text"
                                 name="location"
                                 value={form.location}
                                 onChange={handleChange}
-                                className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
+                                className="w-full border rounded-md px-3 py-2 text-sm"
+                                required
                             />
                         </div>
 
-                        {/* Work Type */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">
-                                Work Type
-                            </label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Work Type</label>
                             <select
-                                name="workType"
-                                value={form.workType}
+                                name="work_type"
+                                value={form.work_type}
                                 onChange={handleChange}
-                                className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
+                                className="w-full border rounded-md px-3 py-2 text-sm"
+                                required
                             >
                                 <option value="WFO">WFO</option>
                                 <option value="WFH">WFH</option>
-                                <option value="Remote">Remote</option>
+                                <option value="Hybrid">Hybrid</option>
                             </select>
                         </div>
                     </div>
 
-                    {/* Deadline */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                            Deadline
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Deadline</label>
                         <input
                             type="date"
                             name="deadline"
                             value={form.deadline}
                             onChange={handleChange}
-                            className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
+                            className="w-full border rounded-md px-3 py-2 text-sm"
                         />
                     </div>
                 </div>
 
-                {/* Footer */}
                 <div className="flex justify-end gap-2 p-4 border-t">
                     <button
                         type="button"
                         onClick={onClose}
-                        className="px-4 py-2 text-sm bg-gray-200 rounded-md hover:bg-gray-300"
+                        className="px-4 py-2 text-sm bg-gray-200 rounded-md hover:bg-gray-300 transition"
                     >
                         Cancel
                     </button>
                     <button
                         type="submit"
                         disabled={loading}
-                        className="px-4 py-2 text-sm bg-[#134280] text-white rounded-md hover:bg-[#0f2e5c]"
+                        className="px-4 py-2 text-sm bg-[#134280] text-white rounded-md hover:bg-[#0f2e5c] disabled:opacity-50 transition"
                     >
                         {loading ? "Saving..." : "Save Changes"}
                     </button>

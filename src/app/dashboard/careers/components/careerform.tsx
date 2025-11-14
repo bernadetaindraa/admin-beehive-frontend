@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
+import Swal from "sweetalert2";
 
 interface CareerFormProps {
     onSuccess: () => void;
 }
 
-// Import Markdown Editor secara dinamis biar gak error di SSR
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
 
 export default function CareerForm({ onSuccess }: CareerFormProps) {
@@ -18,30 +18,61 @@ export default function CareerForm({ onSuccess }: CareerFormProps) {
     const [location, setLocation] = useState("");
     const [workType, setWorkType] = useState<"WFH" | "WFO" | "Hybrid">("WFO");
     const [deadline, setDeadline] = useState("");
+    const [loading, setLoading] = useState(false);
 
-    const handleSubmit = () => {
-        const newCareer = {
-            id: Date.now(),
+    const apiBase = "http://127.0.0.1:8000";
+
+    const handleSubmit = async () => {
+        if (!title || !qualifications || !location || !deadline) {
+            Swal.fire("Error", "Title, Qualifications, Location, dan Deadline wajib diisi!", "error");
+            return;
+        }
+
+        setLoading(true);
+
+        const payload = {
             title,
             qualifications,
-            benefits,
-            keyResponsibilities,
+            benefits: benefits || null,
+            responsibilities: keyResponsibilities || null,
             location,
-            workType,
+            work_type: workType,
             deadline,
         };
 
-        console.log("Career saved:", newCareer);
-        onSuccess();
+        try {
+            const token = localStorage.getItem("token");
+            const res = await fetch(`${apiBase}/api/careers`, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
+            });
 
-        // Reset form setelah simpan
-        setTitle("");
-        setQualifications("");
-        setBenefits("");
-        setKeyResponsibilities("");
-        setLocation("");
-        setWorkType("WFO");
-        setDeadline("");
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.message || "Gagal menyimpan karir");
+            }
+
+            Swal.fire("Sukses!", "Lowongan karir berhasil ditambahkan.", "success");
+            onSuccess();
+
+            // Reset form
+            setTitle("");
+            setQualifications("");
+            setBenefits("");
+            setKeyResponsibilities("");
+            setLocation("");
+            setWorkType("WFO");
+            setDeadline("");
+        } catch (err: any) {
+            Swal.fire("Error!", err.message, "error");
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -49,7 +80,6 @@ export default function CareerForm({ onSuccess }: CareerFormProps) {
             <h2 className="text-lg font-semibold mb-4 text-gray-800">Add New Career</h2>
 
             <div className="space-y-4">
-                {/* Title */}
                 <input
                     type="text"
                     placeholder="Career Title"
@@ -59,7 +89,6 @@ export default function CareerForm({ onSuccess }: CareerFormProps) {
                     required
                 />
 
-                {/* Qualifications */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                         Qualifications (Markdown)
@@ -73,7 +102,6 @@ export default function CareerForm({ onSuccess }: CareerFormProps) {
                     </div>
                 </div>
 
-                {/* Benefits */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                         Benefits (Markdown)
@@ -87,7 +115,6 @@ export default function CareerForm({ onSuccess }: CareerFormProps) {
                     </div>
                 </div>
 
-                {/* Key Responsibilities */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                         Key Responsibilities (Markdown)
@@ -101,23 +128,22 @@ export default function CareerForm({ onSuccess }: CareerFormProps) {
                     </div>
                 </div>
 
-                {/* Location */}
-                <input
-                    type="text"
-                    placeholder="Location"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    className="w-full border px-3 py-2 rounded-md focus:outline-[#134280]"
-                />
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                    <input
+                        type="text"
+                        placeholder="Location"
+                        value={location}
+                        onChange={(e) => setLocation(e.target.value)}
+                        className="w-full border px-3 py-2 rounded-md focus:outline-[#134280]"
+                    />
+                </div>
 
-                {/* Work Type */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Work Type</label>
                     <select
                         value={workType}
-                        onChange={(e) =>
-                            setWorkType(e.target.value as "WFH" | "WFO" | "Hybrid")
-                        }
+                        onChange={(e) => setWorkType(e.target.value as "WFH" | "WFO" | "Hybrid")}
                         className="w-full border px-3 py-2 rounded-md focus:outline-[#134280]"
                     >
                         <option value="WFO">WFO</option>
@@ -126,7 +152,6 @@ export default function CareerForm({ onSuccess }: CareerFormProps) {
                     </select>
                 </div>
 
-                {/* Deadline */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Deadline</label>
                     <input
@@ -141,9 +166,10 @@ export default function CareerForm({ onSuccess }: CareerFormProps) {
             <div className="flex justify-end mt-5">
                 <button
                     onClick={handleSubmit}
-                    className="px-4 py-2 rounded-md bg-[#134280] text-white hover:bg-[#0f2e5c] transition"
+                    disabled={loading}
+                    className="px-4 py-2 rounded-md bg-[#134280] text-white hover:bg-[#0f2e5c] transition disabled:opacity-50"
                 >
-                    Save
+                    {loading ? "Saving..." : "Save"}
                 </button>
             </div>
         </div>

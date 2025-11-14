@@ -8,7 +8,7 @@ export default function ArticlesPage() {
     return (
         <DashboardLayout>
             <div className="space-y-6">
-                 <div>
+                <div>
                     <h1 className="text-xl font-semibold text-gray-800">Manage Articles</h1>
                     <p className="text-gray-600 text-sm">
                         Add new articles or manage existing ones.
